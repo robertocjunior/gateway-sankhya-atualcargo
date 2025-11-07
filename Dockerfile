@@ -9,6 +9,8 @@ RUN npm install -g pm2
 
 # 4. Copy package files and install dependencies
 COPY package.json .
+COPY package-lock.json .
+
 # Usamos 'npm ci' para uma instalação limpa de produção
 RUN npm ci --omit=dev
 
@@ -20,4 +22,4 @@ COPY . .
 
 # 7. Start the application using pm2-runtime
 # pm2-runtime é feito para containers, mantendo o processo no foreground
-CMD [ "pm2-runtime", "start", "ecosystem.config.js" ]
+CMD [ "pm2-runtime", "start", "ecosystem.config.cjs" ]
