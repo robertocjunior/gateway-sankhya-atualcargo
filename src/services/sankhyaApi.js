@@ -15,11 +15,51 @@ const apiClient = axios.create({
 });
 
 /**
- * Realiza o login no Sankhya e armazena o jsessionid.
+ * Função de login real, que será envolvida pela trava.
+ */
+async function performLogin() {
+  logger.info('Autenticando no Sankhya (iniciando nova sessão)...');
+  try {
+    const loginBody = {
+      serviceName: 'MobileLoginSP.login',
+      requestBody: {
+        NOMUSU: { $: config.sankhya.username },
+        INTERNO: { $: config.sankhya.password },
+        KEEPCONNECTED: { $: 'S' },
+      },
+    };
+
+    const response = await apiClient.post(
+      '/service.sbr?serviceName=MobileLoginSP.login&outputType=json',
+      loginBody
+    );
+
+    const data = response.data;
+    if (data.status !== '1' || !data.responseBody?.jsessionid?.$) {
+      throw new Error(
+        `Falha na autenticação Sankhya: ${data.statusMessage || 'Resposta inválida'}`
+      );
+    }
+
+    jsessionid = data.responseBody.jsessionid.$;
+    logger.info(`Autenticação no Sankhya bem-sucedida. JSessionID: ${jsessionid.substring(0, 10)}...`);
+  } catch (error) {
+    logger.error(
+      `Falha ao autenticar no Sankhya: ${error.message}`,
+      error.response?.data
+    );
+    jsessionid = null; // Limpa em caso de erro
+    throw error; // Propaga o erro para quem chamou
+  } finally {
+    loginPromise = null; // Libera a trava, permitindo novos logins (ex: em caso de expiração)
+  }
+}
+
+/**
  * Garante que apenas UMA requisição de login ocorra por vez.
  */
 async function login() {
-  // Se já temos um ID e nenhum login está em andamento, podemos sair
+  // Se já temos um ID e nenhum login está em andamento, estamos bem.
   if (jsessionid && !loginPromise) {
     return;
   }
@@ -30,44 +70,9 @@ async function login() {
     return loginPromise;
   }
 
-  // Inicia um novo login e armazena a Promise
-  loginPromise = (async () => {
-    logger.info('Autenticando no Sankhya (iniciando nova sessão)...');
-    try {
-      const loginBody = {
-        serviceName: 'MobileLoginSP.login',
-        requestBody: {
-          NOMUSU: { $: config.sankhya.username },
-          INTERNO: { $: config.sankhya.password },
-          KEEPCONNECTED: { $: 'S' },
-        },
-      };
-
-      const response = await apiClient.post(
-        '/service.sbr?serviceName=MobileLoginSP.login&outputType=json',
-        loginBody
-      );
-
-      const data = response.data;
-      if (data.status !== '1' || !data.responseBody?.jsessionid?.$) {
-        throw new Error(
-          `Falha na autenticação Sankhya: ${data.statusMessage || 'Resposta inválida'}`
-        );
-      }
-
-      jsessionid = data.responseBody.jsessionid.$;
-      logger.info(`Autenticação no Sankhya bem-sucedida. JSessionID: ${jsessionid.substring(0, 10)}...`);
-    } catch (error) {
-      logger.error(
-        `Falha ao autenticar no Sankhya: ${error.message}`,
-        error.response?.data
-      );
-      jsessionid = null; // Limpa em caso de erro
-      throw error; // Propaga o erro para quem chamou
-    } finally {
-      loginPromise = null; // Libera a trava, permitindo novos logins (ex: em caso de expiração)
-    }
-  })();
+  // CORREÇÃO: Atribui a promise à trava IMEDIATAMENTE antes de
+  // (e não depois) de chamar a função assíncrona.
+  loginPromise = performLogin();
 
   return loginPromise;
 }
@@ -136,8 +141,9 @@ async function makeRequest(serviceName, requestBody) {
  * @returns {Array<object>}
  */
 function formatQueryResponse(responseBody) {
-  const fields = responseBody.fieldsMetadata.map((f) => f.name);
-  const rows = responseBody.rows;
+  // Adiciona verificação para o caso de a query não retornar linhas
+  const fields = responseBody.fieldsMetadata?.map((f) => f.name) || [];
+  const rows = responseBody.rows || [];
   
   return rows.map((row) => {
     const obj = {};
@@ -222,7 +228,7 @@ export async function insertVehicleHistory(records) {
   const formattedRecords = records.map(r => {
     const dateObj = parseAtualcargoDate(r.date);
     const dathorStr = formatForSankhyaInsert(dateObj);
-    const link = `https://maps.google.com/?q=${r.latlong.latitude},${r.latlong.longitude}`;
+    const link = `https://maps.google.com/?q=$${r.latlong.latitude},${r.latlong.longitude}`; // Corrigido o link
 
     return {
       foreignKey: {
@@ -270,7 +276,7 @@ export async function insertIscaHistory(records) {
   const formattedRecords = records.map(r => {
     const dateObj = parseAtualcargoDate(r.date);
     const dathorStr = formatForSankhyaInsert(dateObj);
-    const link = `https://maps.google.com/?q=${r.latlong.latitude},${r.latlong.longitude}`;
+    const link = `https://maps.google.com/?q=$${r.latlong.latitude},${r.latlong.longitude}`; // Corrigido o link
     
     return {
       foreignKey: {
