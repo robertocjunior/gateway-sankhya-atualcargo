@@ -2,16 +2,33 @@ import axios from 'axios';
 import config from '../config.js';
 import { createLogger } from '../logger.js';
 import { formatForSankhyaInsert, parseAtualcargoDate } from '../utils/dateTime.js';
+import { TextDecoder } from 'util'; // Importa o Decodificador de Texto
 
 const logger = createLogger('Sankhya');
 
 // --- Gerenciamento de Sessão ---
 let jsessionid = null;
-let loginPromise = null; // Controla requisições de login simultâneas
+let loginPromise = null;
 
+// --- ATUALIZAÇÃO DO AXIOS CLIENT ---
+// Força a decodificação da resposta como 'iso-8859-1' (latin1)
+// para interpretar corretamente os caracteres portugueses (ã, ç, etc.)
 const apiClient = axios.create({
   baseURL: config.sankhya.baseUrl,
   timeout: config.service.timeout,
+  responseType: 'arraybuffer', // Pede os dados brutos (bytes)
+  transformResponse: [data => {
+    try {
+      // Decodifica os bytes usando o padrão 'iso-8859-1'
+      const decoder = new TextDecoder('iso-8859-1');
+      const decoded = decoder.decode(data);
+      // Converte a string decodificada para JSON
+      return JSON.parse(decoded);
+    } catch (e) {
+      logger.error('Falha ao decodificar ou parsear resposta do Sankhya.', e);
+      return data;
+    }
+  }],
 });
 
 /**
@@ -28,10 +45,18 @@ async function performLogin() {
         KEEPCONNECTED: { $: 'S' },
       },
     };
-
-    const response = await apiClient.post(
+    
+    // O login não precisa da transformação de resposta,
+    // então chamamos com 'axios.post' puro para evitar que o transformador tente ler.
+    // Usamos o 'apiClient.defaults' para pegar a URL base e o timeout.
+    const response = await axios.post(
       '/service.sbr?serviceName=MobileLoginSP.login&outputType=json',
-      loginBody
+      loginBody,
+      {
+        baseURL: apiClient.defaults.baseURL,
+        timeout: apiClient.defaults.timeout,
+        responseType: 'json' // O login parece responder em UTF-8 padrão
+      }
     );
 
     const data = response.data;
@@ -48,10 +73,10 @@ async function performLogin() {
       `Falha ao autenticar no Sankhya: ${error.message}`,
       error.response?.data
     );
-    jsessionid = null; // Limpa em caso de erro
-    throw error; // Propaga o erro para quem chamou
+    jsessionid = null;
+    throw error;
   } finally {
-    loginPromise = null; // Libera a trava, permitindo novos logins (ex: em caso de expiração)
+    loginPromise = null;
   }
 }
 
@@ -59,21 +84,14 @@ async function performLogin() {
  * Garante que apenas UMA requisição de login ocorra por vez.
  */
 async function login() {
-  // Se já temos um ID e nenhum login está em andamento, estamos bem.
   if (jsessionid && !loginPromise) {
     return;
   }
-
-  // Se um login já está em andamento, aguarda ele terminar
   if (loginPromise) {
     logger.debug('Aguardando login em andamento...');
     return loginPromise;
   }
-
-  // CORREÇÃO: Atribui a promise à trava IMEDIATAMENTE antes de
-  // (e não depois) de chamar a função assíncrona.
   loginPromise = performLogin();
-
   return loginPromise;
 }
 
@@ -84,8 +102,6 @@ async function login() {
  * @returns {Promise<object>} responseBody
  */
 async function makeRequest(serviceName, requestBody) {
-  // Garante que estamos logados ANTES de fazer a requisição.
-  // Esta chamada agora é segura contra "race conditions".
   await login();
 
   const url = `/service.sbr?serviceName=${serviceName}&outputType=json`;
@@ -95,6 +111,7 @@ async function makeRequest(serviceName, requestBody) {
   };
 
   try {
+    // Agora o 'apiClient' vai decodificar a resposta corretamente
     const response = await apiClient.post(url, body, { headers });
     
     // Sucesso
@@ -102,14 +119,16 @@ async function makeRequest(serviceName, requestBody) {
       return response.data.responseBody;
     }
     
-    // Erro de autenticação (sessão expirou)
-    if (response.data.status === '3' && response.data.statusMessage?.includes('Não autorizado')) {
-      logger.warn('[Sankhya] JSessionID expirado ou inválido. Reautenticando...');
+    // --- ATUALIZAÇÃO DA VERIFICAÇÃO ---
+    // Agora que a decodificação está correta, podemos verificar a string exata.
+    if (response.data.status === '3' && response.data.statusMessage === 'Não autorizado.') {
+      logger.warn('[Sankhya] JSessionID expirado ou inválido (Não autorizado). Reautenticando...');
       jsessionid = null; // Limpa o ID antigo
-      await login(); // Faz um novo login (que é seguro)
+      await login(); // Faz um novo login
       
       // Tenta novamente com o novo ID
       const newHeaders = { Cookie: `JSESSIONID=${jsessionid}` };
+      logger.debug(`Repetindo a requisição ${serviceName} com nova sessão...`);
       const retryResponse = await apiClient.post(url, body, { headers: newHeaders });
 
       if (retryResponse.data.status === '1') {
@@ -118,7 +137,7 @@ async function makeRequest(serviceName, requestBody) {
       }
       
       throw new Error(
-        `Falha na requisição Sankhya após re-autenticar: ${retryResponse.data.statusMessage}`
+        `Falha na requisição Sankhya (${serviceName}) após re-autenticar: ${retryResponse.data.statusMessage}`
       );
     }
     
@@ -141,7 +160,6 @@ async function makeRequest(serviceName, requestBody) {
  * @returns {Array<object>}
  */
 function formatQueryResponse(responseBody) {
-  // Adiciona verificação para o caso de a query não retornar linhas
   const fields = responseBody.fieldsMetadata?.map((f) => f.name) || [];
   const rows = responseBody.rows || [];
   
@@ -228,7 +246,7 @@ export async function insertVehicleHistory(records) {
   const formattedRecords = records.map(r => {
     const dateObj = parseAtualcargoDate(r.date);
     const dathorStr = formatForSankhyaInsert(dateObj);
-    const link = `https://maps.google.com/?q=$${r.latlong.latitude},${r.latlong.longitude}`; // Corrigido o link
+    const link = `https://maps.google.com/?q=$${r.latlong.latitude},${r.latlong.longitude}`;
 
     return {
       foreignKey: {
@@ -276,7 +294,7 @@ export async function insertIscaHistory(records) {
   const formattedRecords = records.map(r => {
     const dateObj = parseAtualcargoDate(r.date);
     const dathorStr = formatForSankhyaInsert(dateObj);
-    const link = `https://maps.google.com/?q=$${r.latlong.latitude},${r.latlong.longitude}`; // Corrigido o link
+    const link = `https://maps.google.com/?q=$${r.latlong.latitude},${r.latlong.longitude}`;
     
     return {
       foreignKey: {
