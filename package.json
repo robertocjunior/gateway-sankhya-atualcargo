@@ -5,7 +5,13 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "pm2 start ecosystem.config.cjs",
+    "start:dev": "pm2-runtime ecosystem.config.cjs",
+    "stop": "pm2 stop ecosystem.config.cjs",
+    "logs": "pm2 logs gateway-sankhya",
+    "docker:up": "docker-compose up --build -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "author": "",
   "license": "ISC",
@@ -13,6 +19,7 @@
     "axios": "^1.7.2",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
+    "pm2": "^5.4.2",
     "winston": "^3.13.0"
   }
 }

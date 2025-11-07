@@ -1,0 +1,12 @@
+# Exclui dependências locais
+node_modules
+
+# Exclui logs locais
+logs
+
+# Exclui o arquivo .env local (o Docker Compose fornecerá as variáveis)
+.env
+
+# Exclui arquivos do Git
+.git
+.gitignore
