@@ -8,8 +8,8 @@ const config = {
   atualcargo: {
     baseUrl: process.env.ATUALCARGO_URL,
     accessKey: process.env.ATUALCARGO_ACCESS_KEY,
-    username: process.env.ATUALCARGO_USERNAME, // NOVO
-    password: process.env.ATUALCARGO_PASSWORD, // NOVO
+    username: process.env.ATUALCARGO_USERNAME,
+    password: process.env.ATUALCARGO_PASSWORD,
   },
   sankhya: {
     baseUrl: process.env.SANKHYA_URL,
@@ -22,6 +22,11 @@ const config = {
     // Converte segundos para milissegundos
     timeout: parseInt(process.env.REQUEST_TIMEOUT_SECONDS, 10) * 1000,
     logLevel: process.env.LOG_LEVEL || 'info',
+
+    // NOVAS Configurações de Retentativa
+    sankhyaRetryLimit: parseInt(process.env.SANKHYA_RETRY_LIMIT, 10) || 3,
+    sankhyaRetryDelay:
+      (parseInt(process.env.SANKHYA_RETRY_DELAY_MINUTES, 10) || 1) * 60 * 1000,
   },
 };
 
@@ -29,8 +34,8 @@ const config = {
 const requiredKeys = [
   config.atualcargo.baseUrl,
   config.atualcargo.accessKey,
-  config.atualcargo.username, // NOVO
-  config.atualcargo.password, // NOVO
+  config.atualcargo.username,
+  config.atualcargo.password,
   config.sankhya.baseUrl,
   config.sankhya.username,
   config.sankhya.password,
