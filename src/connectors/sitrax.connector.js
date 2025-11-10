@@ -1,14 +1,15 @@
 import axios from 'axios';
-import { jobsConfig } from '../../config/jobs.js';
-import { appConfig } from '../../config/app.js';
-import { createLogger } from '../../logger.js';
+import { jobsConfig } from '../config/jobs.js';
+import { appConfig } from '../config/app.js';
+import { createLogger } from '../utils/logger.js'; // CAMINHO CORRIGIDO
 
-const logger = createLogger('SitraxAPI');
-const config = jobsConfig.sitrax.api;
+const logger = createLogger('SitraxAPI'); // CORRIGIDO
+const config = jobsConfig.sitrax;
+const { timeout } = appConfig;
 
 const apiClient = axios.create({
-  baseURL: config.baseUrl,
-  timeout: appConfig.timeout,
+  baseURL: config.url,
+  timeout: timeout,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -18,7 +19,7 @@ const apiClient = axios.create({
  * Busca as últimas posições do Sitrax.
  * @returns {Promise<Array<Object>>} Lista de posições
  */
-export async function getLastPositions() {
+export async function getSitraxPositions() {
   logger.info('Buscando últimas posições...');
   try {
     const requestBody = {
@@ -39,10 +40,14 @@ export async function getLastPositions() {
     return [];
 
   } catch (error) {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.response?.status === 504) {
+      logger.error('Timeout ao buscar posições.');
+      throw new Error('Timeout da API da Sitrax excedido.');
+    }
     logger.error(
       `Falha ao buscar posições: ${error.message}`,
       error.response?.data
     );
-    throw error;
+    throw new Error(`Falha ao buscar posições da Sitrax: ${error.message}`);
   }
 }

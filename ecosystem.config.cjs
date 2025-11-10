@@ -1,9 +1,10 @@
 // ecosystem.config.cjs
+// Usamos .cjs (CommonJS) para garantir que o PM2 consiga ler.
 module.exports = {
   apps: [
     {
-      name: 'gateway-sankhya',
-      script: 'src/index.js',
+      name: 'integracao-hub',
+      script: 'index.js', // O ponto de entrada principal
       watch: false,
       instances: 1,
       autorestart: true,

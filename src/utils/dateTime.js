@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import { parse, isAfter, format, isValid } from 'date-fns';
 
 // Formato Atualcargo: 2025-11-07 15:38:12
@@ -14,7 +15,11 @@ const DDMMYYYY_HHMMSS_FORMAT = 'dd/MM/yyyy HH:mm:ss';
  */
 export const parseAtualcargoDate = (dateString) => {
   const date = parse(dateString, ATUALCARGO_FORMAT, new Date());
-  return isValid(date) ? date : null;
+  if (!isValid(date)) {
+    logger.warn(`Data (Atualcargo) inválida: ${dateString}.`);
+    return null;
+  }
+  return date;
 };
 
 /**
@@ -22,22 +27,34 @@ export const parseAtualcargoDate = (dateString) => {
  */
 export const parseSankhyaQueryDate = (dateString) => {
   const date = parse(dateString, SANKHYA_QUERY_FORMAT, new Date());
-  return isValid(date) ? date : null;
+  if (!isValid(date)) {
+    logger.warn(`Data (Sankhya Query) inválida: ${dateString}.`);
+    return null;
+  }
+  return date;
 };
 
 /**
- * NOVO: Converte uma string de data (dd/MM/yyyy) para um objeto Date.
+ * Converte uma string de data (dd/MM/yyyy) para um objeto Date.
  * Usado pelo Sitrax e pelo insert do Sankhya.
  */
-export const parseDateTime = (dateString) => {
+export const parseSitraxDate = (dateString) => {
   const date = parse(dateString, DDMMYYYY_HHMMSS_FORMAT, new Date());
-  return isValid(date) ? date : null;
+  if (!isValid(date)) {
+    logger.warn(`Data (Sitrax) inválida: ${dateString}.`);
+    return null;
+  }
+  return date;
 }
 
 /**
- * Formata um objeto Date para o padrão de inserção do Sankhya.
+ * Formata um objeto Date para o padrão de inserção do Sankhya (DD/MM/YYYY HH:mm:ss).
  */
 export const formatForSankhyaInsert = (dateObj) => {
+  if (!dateObj || !isValid(dateObj)) {
+     logger.warn(`Data (formatSankhyaInsert) inválida: ${dateObj}.`);
+     return null;
+  }
   return format(dateObj, DDMMYYYY_HHMMSS_FORMAT);
 };
 
@@ -46,20 +63,25 @@ export const formatForSankhyaInsert = (dateObj) => {
  * Retorna true se a nova data for mais recente.
  */
 export const isNewer = (newDate, lastDateStr) => {
-  if (!isValid(newDate)) {
+  if (!newDate || !isValid(newDate)) {
     return false; // Data nova é inválida
   }
   
-  // Se não houver data antiga, qualquer data nova válida é aceita
   if (!lastDateStr) {
-    return true;
+    return true; // Não há data antiga, aceita a nova
   }
 
   const lastDate = parseSankhyaQueryDate(lastDateStr);
 
-  if (!isValid(lastDate)) {
+  if (!lastDate || !isValid(lastDate)) {
     return true; // Data antiga é inválida, aceita a nova
   }
 
-  return isAfter(newDate, lastDate);
+  return newDate.getTime() > lastDate.getTime();
 };
+
+/**
+ * Cria uma pausa assíncrona
+ * @param {number} ms - Tempo em milissegundos
+ */
+export const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
