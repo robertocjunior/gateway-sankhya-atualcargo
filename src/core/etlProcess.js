@@ -134,7 +134,7 @@ async function processSankhyaData(positions) {
         `[ETL Concluído] ${newVehicleRecords.length} registros de veículos e ${newIscaRecords.length} de iscas inseridos com sucesso.`
       );
 
-      // Se chegou aqui, deu tudo certo. Sai do loop de retentativa.
+      // Sai do loop de retentativa.
       return;
     } catch (error) {
       logger.error(

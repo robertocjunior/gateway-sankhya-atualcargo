@@ -1,4 +1,5 @@
 import winston from 'winston';
+import 'winston-daily-rotate-file'; // Importa o novo pacote
 import path from 'path';
 import fs from 'fs';
 import config from './config.js';
@@ -24,22 +25,34 @@ const logger = winston.createLogger({
     new winston.transports.Console({
       format: combine(colorize(), align(), logFormat),
     }),
-    new winston.transports.File({
-      filename: path.resolve(process.cwd(), logDir, 'error.log'),
+    
+    // --- TRANSPORT DE ERRO ATUALIZADO ---
+    new winston.transports.DailyRotateFile({
       level: 'error',
+      filename: path.resolve(logDir, 'error-%DATE%.log'), // O %DATE% é adicionado
+      datePattern: 'YYYY-MM-DD', // Rotaciona diariamente
+      zippedArchive: true, // Compacta logs antigos
+      maxSize: '20m', // Tamanho máximo de 20MB por arquivo
+      maxFiles: '30d', // Apaga arquivos mais antigos que 30 dias
     }),
-    new winston.transports.File({
-      filename: path.resolve(process.cwd(), logDir, 'combined.log'),
+    
+    // --- TRANSPORT GERAL ATUALIZADO ---
+    new winston.transports.DailyRotateFile({
+      filename: path.resolve(logDir, 'combined-%DATE%.log'), // O %DATE% é adicionado
+      datePattern: 'YYYY-MM-DD', // Rotaciona diariamente
+      zippedArchive: true, // Compacta logs antigos
+      maxSize: '20m', // Tamanho máximo de 20MB por arquivo
+      maxFiles: '30d', // Apaga arquivos mais antigos que 30 dias
     }),
   ],
   exceptionHandlers: [
     new winston.transports.File({
-      filename: path.resolve(process.cwd(), logDir, 'exceptions.log'),
+      filename: path.resolve(logDir, 'exceptions.log'),
     }),
   ],
   rejectionHandlers: [
     new winston.transports.File({
-      filename: path.resolve(process.cwd(), logDir, 'rejections.log'),
+      filename: path.resolve(logDir, 'rejections.log'),
     }),
   ],
 });

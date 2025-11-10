@@ -71,7 +71,7 @@ export async function getLastPositions() {
     // 1. Garante que o token é válido ANTES de logar a ação
     const authToken = await getValidToken();
 
-    // 2. AGORA sim, loga a ação de busca
+    // 2. AGORA loga a ação de busca
     logger.info('Buscando últimas posições na Atualcargo...');
 
     const response = await apiClient.get('/api/positions/v1/last', {

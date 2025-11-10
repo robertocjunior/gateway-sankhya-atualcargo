@@ -2,7 +2,7 @@ import axios from 'axios';
 import config from '../config.js';
 import { createLogger } from '../logger.js';
 import { formatForSankhyaInsert, parseAtualcargoDate } from '../utils/dateTime.js';
-import { TextDecoder } from 'util'; // Importa o Decodificador de Texto
+import { TextDecoder } from 'util';
 
 const logger = createLogger('Sankhya');
 
