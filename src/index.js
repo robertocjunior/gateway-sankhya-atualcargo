@@ -1,36 +1,58 @@
-import config from './config.js';
 import logger from './logger.js';
-import { runEtlProcess } from './core/etlProcess.js';
+import { jobsConfig } from './config/jobs.js';
+import * as atualcargoJob from './jobs/atualcargoJob.js';
+import * as sitraxJob from './jobs/sitraxJob.js';
+
+logger.info('[Serviço] Iniciando Hub de Integração de Rastreamento...');
 
 /**
- * Função principal que gerencia o loop do serviço.
- * Utiliza setTimeout recursivo para evitar sobreposição de execuções.
+ * Cria e gerencia um loop de job seguro (setTimeout recursivo).
+ * @param {string} name - Nome do Job (para logs)
+ * @param {Function} jobFunction - A função async 'run' do job
+ * @param {number} intervalMs - O intervalo em milissegundos
  */
-async function mainLoop() {
-  logger.info('--------------------------------------------------');
-  logger.info(`Iniciando novo ciclo de integração...`);
-  
-  try {
-    await runEtlProcess();
-  } catch (error) {
-    // Erros graves não tratados no etlProcess são pegos aqui
-    logger.error(`[MainLoop] Erro fatal não tratado no ciclo: ${error.message}`, { 
-      stack: error.stack 
-    });
-  } finally {
-    const nextRunMin = config.service.loopInterval / 60000;
-    logger.info(`Ciclo finalizado. Próxima execução em ${nextRunMin} minutos.`);
-    logger.info('--------------------------------------------------');
-    
-    // Agenda a próxima execução 
-    setTimeout(mainLoop, config.service.loopInterval);
-  }
+function createJob(name, jobFunction, intervalMs) {
+  logger.info(
+    `[JobScheduler] Agendando job [${name}] para rodar a cada ${intervalMs / 60000} minutos.`
+  );
+
+  const loop = async () => {
+    logger.info(`---------------- [Job: ${name}] ----------------`);
+    try {
+      await jobFunction();
+    } catch (error) {
+      // Pega erros não tratados dentro da função 'run' do job
+      logger.error(
+        `[Job: ${name}] Erro fatal não tratado no loop: ${error.message}`,
+        { stack: error.stack }
+      );
+    } finally {
+      logger.info(`[Job: ${name}] Ciclo finalizado. Próxima execução em ${intervalMs / 60000} min.`);
+      logger.info(`--------------------------------------------------`);
+      
+      // Agenda a próxima execução
+      setTimeout(loop, intervalMs);
+    }
+  };
+
+  // Inicia o primeiro ciclo
+  loop();
 }
 
-// --- Início do Serviço ---
-logger.info('[Serviço] Iniciando serviço de integração Sankhya-Atualcargo.');
-logger.info(`Intervalo de execução: ${config.service.loopInterval / 60000} minutos.`);
-logger.info(`Timeout de requisição: ${config.service.timeout / 1000} segundos.`);
+// --- Iniciar Jobs ---
 
-// Inicia o primeiro ciclo
-mainLoop();
+if (jobsConfig.atualcargo.enabled) {
+  createJob(
+    'Atualcargo',
+    atualcargoJob.run,
+    jobsConfig.atualcargo.interval
+  );
+}
+
+if (jobsConfig.sitrax.enabled) {
+  createJob(
+    'Sitrax',
+    sitraxJob.run,
+    jobsConfig.sitrax.interval
+  );
+}

@@ -1,18 +1,16 @@
 import { parse, isAfter, format, isValid } from 'date-fns';
 
-// Formato da API Atualcargo: 2025-11-07 15:38:12 [cite: 2]
+// Formato Atualcargo: 2025-11-07 15:38:12
 const ATUALCARGO_FORMAT = 'yyyy-MM-dd HH:mm:ss';
 
-// Formato do banco de dados Sankhya (consulta): 07112025 13:58:42 [cite: 482]
-const SANKHYA_DB_FORMAT = 'ddMMyyyy HH:mm:ss';
+// Formato Sankhya (consulta): 07112025 13:58:42
+const SANKHYA_QUERY_FORMAT = 'ddMMyyyy HH:mm:ss';
 
-// Formato de inserção no Sankhya (DatasetSP.save): 03/11/2025 08:38:00 [cite: 614]
-const SANKHYA_INSERT_FORMAT = 'dd/MM/yyyy HH:mm:ss';
+// Formato Sankhya (insert) e Sitrax (data): 03/11/2025 08:38:00
+const DDMMYYYY_HHMMSS_FORMAT = 'dd/MM/yyyy HH:mm:ss';
 
 /**
  * Converte uma string de data da Atualcargo para um objeto Date.
- * @param {string} dateString
- * @returns {Date | null}
  */
 export const parseAtualcargoDate = (dateString) => {
   const date = parse(dateString, ATUALCARGO_FORMAT, new Date());
@@ -20,43 +18,47 @@ export const parseAtualcargoDate = (dateString) => {
 };
 
 /**
- * Converte uma string de data do DB Sankhya para um objeto Date.
- * @param {string} dateString
- * @returns {Date | null}
+ * Converte uma string de data do DB Sankhya (consulta) para um objeto Date.
  */
-export const parseSankhyaDate = (dateString) => {
-  const date = parse(dateString, SANKHYA_DB_FORMAT, new Date());
+export const parseSankhyaQueryDate = (dateString) => {
+  const date = parse(dateString, SANKHYA_QUERY_FORMAT, new Date());
   return isValid(date) ? date : null;
 };
 
 /**
+ * NOVO: Converte uma string de data (dd/MM/yyyy) para um objeto Date.
+ * Usado pelo Sitrax e pelo insert do Sankhya.
+ */
+export const parseDateTime = (dateString) => {
+  const date = parse(dateString, DDMMYYYY_HHMMSS_FORMAT, new Date());
+  return isValid(date) ? date : null;
+}
+
+/**
  * Formata um objeto Date para o padrão de inserção do Sankhya.
- * @param {Date} dateObj
- * @returns {string}
  */
 export const formatForSankhyaInsert = (dateObj) => {
-  return format(dateObj, SANKHYA_INSERT_FORMAT);
+  return format(dateObj, DDMMYYYY_HHMMSS_FORMAT);
 };
 
 /**
- * Compara uma nova data (da Atualcargo) com a última data registrada (do Sankhya).
+ * Compara uma nova data (Date object) com a última data registrada (do Sankhya Query).
  * Retorna true se a nova data for mais recente.
- * @param {string} newDateStr (Formato Atualcargo)
- * @param {string} lastDateStr (Formato Sankhya DB)
- * @returns {boolean}
  */
-export const isNewer = (newDateStr, lastDateStr) => {
-  const newDate = parseAtualcargoDate(newDateStr);
-
-  // Se não houver data antiga, qualquer data nova é válida
+export const isNewer = (newDate, lastDateStr) => {
+  if (!isValid(newDate)) {
+    return false; // Data nova é inválida
+  }
+  
+  // Se não houver data antiga, qualquer data nova válida é aceita
   if (!lastDateStr) {
-    return isValid(newDate);
+    return true;
   }
 
-  const lastDate = parseSankhyaDate(lastDateStr);
+  const lastDate = parseSankhyaQueryDate(lastDateStr);
 
-  if (!isValid(newDate) || !isValid(lastDate)) {
-    return false; // Não arrisca inserir se alguma data for inválida
+  if (!isValid(lastDate)) {
+    return true; // Data antiga é inválida, aceita a nova
   }
 
   return isAfter(newDate, lastDate);

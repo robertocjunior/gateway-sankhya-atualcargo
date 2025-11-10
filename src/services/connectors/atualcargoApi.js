@@ -1,6 +1,6 @@
 import axios from 'axios';
 import config from '../config.js';
-import { createLogger } from '../logger.js';
+import { createLogger } from '../../logger.js';
 
 const logger = createLogger('Atualcargo');
 
